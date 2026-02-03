@@ -1,0 +1,464 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Question Wheel (Operator)</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body class="op-body">
+  <header class="op-header">
+    <div class="op-title">
+      <div class="badge">Operator</div>
+      <h1>Question Wheel</h1>
+      <p class="muted">Select a question, then trigger a realistic spin on the display.</p>
+    </div>
+
+    <div class="op-actions">
+      <button id="openDisplayBtn" class="btn">Open Display Window</button>
+      <button id="fullscreenHintBtn" class="btn btn-ghost">Fullscreen Tip</button>
+    </div>
+  </header>
+
+  <main class="op-grid">
+    <section class="card">
+      <h2>Spin Control</h2>
+
+      <label class="label">Choose question</label>
+      <select id="questionSelect" class="select"></select>
+
+      <div class="row">
+        <label class="check">
+          <input type="checkbox" id="removeAfterSpin" checked />
+          Remove after answered (auto-mark used)
+        </label>
+      </div>
+
+      <div class="row">
+        <label class="check">
+          <input type="checkbox" id="allowRepeats" />
+          Allow selecting already-used questions
+        </label>
+      </div>
+
+      <div class="btn-row">
+        <button id="spinBtn" class="btn btn-primary">SPIN (to selected)</button>
+        <button id="reshuffleBtn" class="btn">Reshuffle</button>
+      </div>
+
+      <div class="btn-row">
+        <button id="undoBtn" class="btn btn-warn">Undo last removal</button>
+        <button id="resetBtn" class="btn btn-danger">Reset all to unused</button>
+      </div>
+
+      <p class="muted small" id="statusLine">Status: Ready</p>
+    </section>
+
+    <section class="card">
+      <h2>Question List</h2>
+      <p class="muted small">Edit the list below. Used questions will be struck through when removal is enabled.</p>
+
+      <div class="btn-row">
+        <button id="loadSampleBtn" class="btn btn-ghost">Load Sample Siena Questions</button>
+        <button id="clearAllBtn" class="btn btn-danger btn-ghost">Clear All</button>
+      </div>
+
+      <textarea id="questionsText" class="textarea" rows="14" spellcheck="false"></textarea>
+
+      <div class="btn-row">
+        <button id="applyListBtn" class="btn btn-primary">Apply List</button>
+        <button id="exportBtn" class="btn">Export JSON</button>
+        <button id="importBtn" class="btn">Import JSON</button>
+        <input id="importFile" type="file" accept="application/json" style="display:none" />
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="row space-between">
+        <div>
+          <div class="stat">
+            <span class="muted">Total</span>
+            <strong id="totalCount">0</strong>
+          </div>
+          <div class="stat">
+            <span class="muted">Unused</span>
+            <strong id="unusedCount">0</strong>
+          </div>
+          <div class="stat">
+            <span class="muted">Used</span>
+            <strong id="usedCount">0</strong>
+          </div>
+        </div>
+
+        <div class="right">
+          <button id="syncNowBtn" class="btn">Sync to Display Now</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Show Notes</h2>
+      <ul class="muted small">
+        <li>Operator picks the question first. The wheel animation lands on that slice every time.</li>
+        <li>If “Remove after answered” is on, the question is automatically marked used after the spin completes.</li>
+        <li>Reshuffle changes the visual order of slices while keeping questions intact.</li>
+        <li>Display stays clean: no operator UI, no controls.</li>
+      </ul>
+
+      <div class="divider"></div>
+
+      <label class="label">Branding</label>
+      <div class="muted small">
+        Edit colors in <code>styles.css</code>. If you want a Siena logo watermark, drop a file at
+        <code>assets/siena-logo.svg</code> (optional) and it will appear automatically.
+      </div>
+    </section>
+  </main>
+
+  <script src="common.js"></script>
+  <script>
+    // ========= Operator App =========
+
+    const els = {
+      openDisplayBtn: document.getElementById('openDisplayBtn'),
+      fullscreenHintBtn: document.getElementById('fullscreenHintBtn'),
+      questionSelect: document.getElementById('questionSelect'),
+      removeAfterSpin: document.getElementById('removeAfterSpin'),
+      allowRepeats: document.getElementById('allowRepeats'),
+      spinBtn: document.getElementById('spinBtn'),
+      reshuffleBtn: document.getElementById('reshuffleBtn'),
+      undoBtn: document.getElementById('undoBtn'),
+      resetBtn: document.getElementById('resetBtn'),
+      statusLine: document.getElementById('statusLine'),
+
+      questionsText: document.getElementById('questionsText'),
+      applyListBtn: document.getElementById('applyListBtn'),
+      loadSampleBtn: document.getElementById('loadSampleBtn'),
+      clearAllBtn: document.getElementById('clearAllBtn'),
+
+      totalCount: document.getElementById('totalCount'),
+      unusedCount: document.getElementById('unusedCount'),
+      usedCount: document.getElementById('usedCount'),
+
+      syncNowBtn: document.getElementById('syncNowBtn'),
+      exportBtn: document.getElementById('exportBtn'),
+      importBtn: document.getElementById('importBtn'),
+      importFile: document.getElementById('importFile'),
+    };
+
+    const channel = makeWheelChannel();
+    const STORE_KEY = 'siena_question_wheel_state_v1';
+
+    let state = loadState() || defaultState();
+    let lastRemovalStack = []; // for undo
+
+    function defaultState() {
+      return {
+        version: 1,
+        removeAfterSpin: true,
+        allowRepeats: false,
+        // `order` controls slice order (shuffle changes this without changing the questions)
+        order: [],
+        questions: [
+          { id: uid(), text: "What made you choose Siena?", used: false },
+          { id: uid(), text: "What surprised you most about campus life?", used: false },
+          { id: uid(), text: "What’s your favorite place to study?", used: false },
+          { id: uid(), text: "What’s one tradition you love?", used: false },
+          { id: uid(), text: "How did you find your community here?", used: false },
+          { id: uid(), text: "What’s your go-to dining hall order?", used: false },
+          { id: uid(), text: "What advice would you give incoming students?", used: false },
+          { id: uid(), text: "What’s been your most meaningful class so far?", used: false }
+        ]
+      };
+    }
+
+    function loadState() {
+      try {
+        const raw = localStorage.getItem(STORE_KEY);
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        if (!parsed || parsed.version !== 1) return null;
+        return parsed;
+      } catch {
+        return null;
+      }
+    }
+
+    function saveState() {
+      localStorage.setItem(STORE_KEY, JSON.stringify(state));
+    }
+
+    function computeOrder() {
+      // Ensure order includes all ids exactly once.
+      const ids = state.questions.map(q => q.id);
+      const current = Array.isArray(state.order) ? state.order.slice() : [];
+
+      const filtered = current.filter(id => ids.includes(id));
+      const missing = ids.filter(id => !filtered.includes(id));
+
+      state.order = filtered.concat(missing);
+    }
+
+    function getOrderedQuestions() {
+      computeOrder();
+      const map = new Map(state.questions.map(q => [q.id, q]));
+      return state.order.map(id => map.get(id)).filter(Boolean);
+    }
+
+    function getSelectableQuestions() {
+      const ordered = getOrderedQuestions();
+      if (state.allowRepeats) return ordered;
+      return ordered.filter(q => !q.used);
+    }
+
+    function refreshUI() {
+      els.removeAfterSpin.checked = !!state.removeAfterSpin;
+      els.allowRepeats.checked = !!state.allowRepeats;
+
+      // Populate textarea as newline list (ignoring used flags in the text view)
+      els.questionsText.value = state.questions.map(q => q.text).join('\n');
+
+      // Populate dropdown
+      const selectable = getSelectableQuestions();
+      els.questionSelect.innerHTML = '';
+      for (const q of selectable) {
+        const opt = document.createElement('option');
+        opt.value = q.id;
+        opt.textContent = q.text;
+        els.questionSelect.appendChild(opt);
+      }
+
+      // Counts
+      const total = state.questions.length;
+      const used = state.questions.filter(q => q.used).length;
+      const unused = total - used;
+
+      els.totalCount.textContent = String(total);
+      els.usedCount.textContent = String(used);
+      els.unusedCount.textContent = String(unused);
+
+      // Disable spin if nothing selectable
+      els.spinBtn.disabled = selectable.length === 0;
+
+      saveState();
+      broadcastSync();
+    }
+
+    function broadcastSync() {
+      channel.post({
+        type: 'sync',
+        payload: {
+          state,
+          // Provide derived ordered list for convenience
+          orderedQuestions: getOrderedQuestions()
+        }
+      });
+    }
+
+    function setStatus(msg) {
+      els.statusLine.textContent = `Status: ${msg}`;
+    }
+
+    // Listen for display events
+    channel.onMessage((msg) => {
+      if (!msg || typeof msg !== 'object') return;
+
+      if (msg.type === 'display_ready') {
+        broadcastSync();
+        setStatus('Display connected');
+        return;
+      }
+
+      if (msg.type === 'spin_complete') {
+        const { selectedId } = msg.payload || {};
+        if (!selectedId) return;
+
+        if (state.removeAfterSpin) {
+          const q = state.questions.find(x => x.id === selectedId);
+          if (q && !q.used) {
+            q.used = true;
+            lastRemovalStack.push(selectedId);
+            saveState();
+          }
+        }
+
+        refreshUI();
+        setStatus('Spin complete');
+        return;
+      }
+
+      if (msg.type === 'request_sync') {
+        broadcastSync();
+        return;
+      }
+    });
+
+    // UI wiring
+    els.openDisplayBtn.addEventListener('click', () => {
+      window.open('display.html', 'wheel_display');
+      setStatus('Opened display window');
+    });
+
+    els.fullscreenHintBtn.addEventListener('click', () => {
+      alert("Tip: Move the Display window to the UHY screen and press F11 (or View > Enter Full Screen on macOS) to hide the browser UI.");
+    });
+
+    els.removeAfterSpin.addEventListener('change', () => {
+      state.removeAfterSpin = els.removeAfterSpin.checked;
+      saveState();
+      broadcastSync();
+      refreshUI();
+    });
+
+    els.allowRepeats.addEventListener('change', () => {
+      state.allowRepeats = els.allowRepeats.checked;
+      saveState();
+      refreshUI();
+    });
+
+    els.spinBtn.addEventListener('click', () => {
+      const selectedId = els.questionSelect.value;
+      if (!selectedId) return;
+
+      // Tell display to spin to selected question id
+      setStatus('Spinning...');
+      channel.post({
+        type: 'spin_to',
+        payload: {
+          selectedId,
+          // Provide current ordered slice list so display matches operator order
+          orderedIds: getOrderedQuestions().map(q => q.id),
+          removeAfterSpin: !!state.removeAfterSpin
+        }
+      });
+    });
+
+    els.reshuffleBtn.addEventListener('click', () => {
+      computeOrder();
+      state.order = shuffleArray(state.order.slice());
+      saveState();
+      refreshUI();
+      setStatus('Reshuffled');
+    });
+
+    els.undoBtn.addEventListener('click', () => {
+      const lastId = lastRemovalStack.pop();
+      if (!lastId) {
+        setStatus('Nothing to undo');
+        return;
+      }
+      const q = state.questions.find(x => x.id === lastId);
+      if (q) q.used = false;
+      saveState();
+      refreshUI();
+      setStatus('Undid last removal');
+    });
+
+    els.resetBtn.addEventListener('click', () => {
+      if (!confirm('Reset all questions to UNUSED?')) return;
+      for (const q of state.questions) q.used = false;
+      lastRemovalStack = [];
+      saveState();
+      refreshUI();
+      setStatus('Reset complete');
+    });
+
+    els.clearAllBtn.addEventListener('click', () => {
+      if (!confirm('Clear all questions?')) return;
+      state.questions = [];
+      state.order = [];
+      lastRemovalStack = [];
+      saveState();
+      refreshUI();
+      setStatus('Cleared all');
+    });
+
+    els.loadSampleBtn.addEventListener('click', () => {
+      state = defaultState();
+      lastRemovalStack = [];
+      computeOrder();
+      saveState();
+      refreshUI();
+      setStatus('Loaded sample list');
+    });
+
+    els.applyListBtn.addEventListener('click', () => {
+      const lines = els.questionsText.value
+        .split('\n')
+        .map(s => s.trim())
+        .filter(Boolean);
+
+      if (lines.length === 0) {
+        alert('Please enter at least one question.');
+        return;
+      }
+
+      // Preserve "used" status where text matches exactly
+      const existingByText = new Map(state.questions.map(q => [q.text, q]));
+      const newQuestions = lines.map(text => {
+        const existing = existingByText.get(text);
+        if (existing) return { ...existing };
+        return { id: uid(), text, used: false };
+      });
+
+      state.questions = newQuestions;
+      computeOrder();
+      saveState();
+      refreshUI();
+      setStatus('Applied list');
+    });
+
+    els.syncNowBtn.addEventListener('click', () => {
+      broadcastSync();
+      setStatus('Synced to display');
+    });
+
+    els.exportBtn.addEventListener('click', () => {
+      const data = JSON.stringify(state, null, 2);
+      const blob = new Blob([data], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'question-wheel-state.json';
+      a.click();
+      URL.revokeObjectURL(url);
+      setStatus('Exported JSON');
+    });
+
+    els.importBtn.addEventListener('click', () => {
+      els.importFile.click();
+    });
+
+    els.importFile.addEventListener('change', async () => {
+      const file = els.importFile.files && els.importFile.files[0];
+      if (!file) return;
+
+      try {
+        const text = await file.text();
+        const parsed = JSON.parse(text);
+        if (!parsed || parsed.version !== 1 || !Array.isArray(parsed.questions)) {
+          alert('Invalid file format.');
+          return;
+        }
+        state = parsed;
+        lastRemovalStack = [];
+        computeOrder();
+        saveState();
+        refreshUI();
+        setStatus('Imported JSON');
+      } catch (e) {
+        alert('Could not import JSON. Check file format.');
+      } finally {
+        els.importFile.value = '';
+      }
+    });
+
+    // Initial boot
+    computeOrder();
+    refreshUI();
+    setStatus('Ready');
+    channel.post({ type: 'operator_ready', payload: {} });
+  </script>
+</body>
+</html>

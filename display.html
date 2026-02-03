@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Question Wheel (Display)</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body class="disp-body">
+  <div class="disp-wrap">
+    <div class="watermark" aria-hidden="true"></div>
+
+    <div class="wheel-stage">
+      <canvas id="wheelCanvas" width="1400" height="1400"></canvas>
+      <div class="pointer" aria-hidden="true"></div>
+    </div>
+
+    <div class="lower-third" id="lowerThird">
+      <div class="lt-label">Question</div>
+      <div class="lt-text" id="questionText">Waiting for operator...</div>
+    </div>
+  </div>
+
+  <script src="common.js"></script>
+  <script src="wheel.js"></script>
+  <script>
+    const channel = makeWheelChannel();
+    const canvas = document.getElementById('wheelCanvas');
+    const questionText = document.getElementById('questionText');
+    const lowerThird = document.getElementById('lowerThird');
+
+    const wheel = new SienaWheel(canvas, {
+      brandText: "", // optional: if you're using a center logo, you may not want text too
+      logoSrc: "assets/center-logo.png", // <-- put your logo file here
+      onStopped: (selected) => {
+        if (selected && selected.text) {
+          questionText.textContent = selected.text;
+          lowerThird.classList.add('show');
+        }
+      }
+    });
+
+    let currentState = null;
+    let orderedQuestions = [];
+
+    function applySync(payload) {
+      currentState = payload.state;
+      orderedQuestions = Array.isArray(payload.orderedQuestions) ? payload.orderedQuestions : [];
+      wheel.setQuestions(orderedQuestions);
+      questionText.textContent = orderedQuestions.length ? "Ready" : "No questions loaded";
+    }
+
+    channel.onMessage((msg) => {
+      if (!msg || typeof msg !== 'object') return;
+
+      if (msg.type === 'sync') {
+        applySync(msg.payload || {});
+        return;
+      }
+
+      if (msg.type === 'spin_to') {
+        const { selectedId, orderedIds } = msg.payload || {};
+        if (!selectedId) return;
+
+        lowerThird.classList.remove('show');
+
+        if (Array.isArray(orderedIds) && currentState && Array.isArray(currentState.questions)) {
+          const map = new Map(currentState.questions.map(q => [q.id, q]));
+          orderedQuestions = orderedIds.map(id => map.get(id)).filter(Boolean);
+          wheel.setQuestions(orderedQuestions);
+        }
+
+        const targetIndex = orderedQuestions.findIndex(q => q.id === selectedId);
+        if (targetIndex < 0) return;
+
+        wheel.spinToIndex(targetIndex, { minTurns: 5, maxTurns: 8, durationMs: 5200 });
+
+        wheel.onceStopped(() => {
+          channel.post({ type: 'spin_complete', payload: { selectedId } });
+        });
+
+        return;
+      }
+
+      if (msg.type === 'operator_ready') {
+        channel.post({ type: 'request_sync', payload: {} });
+      }
+    });
+
+    channel.post({ type: 'display_ready', payload: {} });
+    channel.post({ type: 'request_sync', payload: {} });
+  </script>
+</body>
+</html>
