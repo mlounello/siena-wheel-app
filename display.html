@@ -31,13 +31,7 @@
 
     const wheel = new SienaWheel(canvas, {
       brandText: "",
-      logoSrc: "assets/center-logo.png",
-      onStopped: (selected) => {
-        if (selected && selected.text) {
-          questionText.textContent = selected.text;
-          lowerThird.classList.add('show');
-        }
-      }
+      logoSrc: "assets/center-logo.png"
     });
 
     let currentState = null;
@@ -48,9 +42,9 @@
       orderedQuestions = Array.isArray(payload.orderedQuestions) ? payload.orderedQuestions : [];
       wheel.setQuestions(orderedQuestions);
 
-      // Keep lower third hidden until a spin completes
-      lowerThird.classList.remove('show');
-      questionText.textContent = "";
+      // Keep the lower-third behavior like before:
+      // It stays hidden until a spin completes and we have a question to show.
+      // (So do NOT add .show here.)
     }
 
     channel.onMessage((msg) => {
@@ -65,7 +59,7 @@
         const { selectedId, orderedIds } = msg.payload || {};
         if (!selectedId) return;
 
-        // Hide lower third during spin
+        // Hide the lower-third during the spin (same "pop in after stop" behavior)
         lowerThird.classList.remove('show');
         questionText.textContent = "";
 
@@ -79,12 +73,22 @@
         const targetIndex = orderedQuestions.findIndex(q => q.id === selectedId);
         if (targetIndex < 0) return;
 
-        wheel.spinToIndex(targetIndex, { minTurns: 5, maxTurns: 8, durationMs: 5200 });
+        // Register a guaranteed "after stop" handler for THIS spin
+        wheel.onceStopped((selected) => {
+          // selected should be the chosen question object
+          if (selected && selected.text) {
+            questionText.textContent = selected.text;
+          } else {
+            // fallback if something weird happens
+            const fallback = orderedQuestions[targetIndex];
+            questionText.textContent = fallback ? fallback.text : "";
+          }
 
-        wheel.onceStopped(() => {
+          lowerThird.classList.add('show');
           channel.post({ type: 'spin_complete', payload: { selectedId } });
         });
 
+        wheel.spinToIndex(targetIndex, { minTurns: 5, maxTurns: 8, durationMs: 5200 });
         return;
       }
 
