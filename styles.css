@@ -170,10 +170,13 @@ html, body { height: 100%; margin: 0; font-family: system-ui, -apple-system, Seg
   top: -10px;
   left: 50%;
   transform: translateX(-50%);
-  width: 0; height: 0;
+  width: 0;
+  height: 0;
+
   border-left: 22px solid transparent;
   border-right: 22px solid transparent;
-  border-bottom: 42px solid var(--white);
+  border-top: 42px solid var(--white); /* points DOWN into the wheel */
+
   filter: drop-shadow(0 6px 10px rgba(0,0,0,0.35));
 }
 

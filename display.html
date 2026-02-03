@@ -17,7 +17,7 @@
 
     <div class="lower-third" id="lowerThird">
       <div class="lt-label">Question</div>
-      <div class="lt-text" id="questionText">Waiting for operator...</div>
+      <div class="lt-text" id="questionText"></div>
     </div>
   </div>
 
@@ -30,8 +30,8 @@
     const lowerThird = document.getElementById('lowerThird');
 
     const wheel = new SienaWheel(canvas, {
-      brandText: "", // optional: if you're using a center logo, you may not want text too
-      logoSrc: "assets/center-logo.png", // <-- put your logo file here
+      brandText: "",
+      logoSrc: "assets/center-logo.png",
       onStopped: (selected) => {
         if (selected && selected.text) {
           questionText.textContent = selected.text;
@@ -47,7 +47,10 @@
       currentState = payload.state;
       orderedQuestions = Array.isArray(payload.orderedQuestions) ? payload.orderedQuestions : [];
       wheel.setQuestions(orderedQuestions);
-      questionText.textContent = orderedQuestions.length ? "Ready" : "No questions loaded";
+
+      // Keep lower third hidden until a spin completes
+      lowerThird.classList.remove('show');
+      questionText.textContent = "";
     }
 
     channel.onMessage((msg) => {
@@ -62,8 +65,11 @@
         const { selectedId, orderedIds } = msg.payload || {};
         if (!selectedId) return;
 
+        // Hide lower third during spin
         lowerThird.classList.remove('show');
+        questionText.textContent = "";
 
+        // Ensure wheel order matches operator
         if (Array.isArray(orderedIds) && currentState && Array.isArray(currentState.questions)) {
           const map = new Map(currentState.questions.map(q => [q.id, q]));
           orderedQuestions = orderedIds.map(id => map.get(id)).filter(Boolean);
