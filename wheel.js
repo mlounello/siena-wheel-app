@@ -5,7 +5,7 @@ class SienaWheel {
     this.opts = opts;
 
     this.questions = [];
-    this.rotation = 0;
+    this.rotation = 0; // radians
     this.isSpinning = false;
 
     this._stopCallbacksOnce = [];
@@ -19,6 +19,7 @@ class SienaWheel {
 
     this._resizeToCanvasAttr();
     window.addEventListener("resize", () => this._resizeToCanvasAttr());
+
     this._draw();
   }
 
@@ -65,6 +66,7 @@ class SienaWheel {
     const n = this.questions.length;
     const slice = (Math.PI * 2) / n;
 
+    // Pointer at top (-90deg). We want chosen slice center under pointer.
     const pointerAngle = -Math.PI / 2;
     const chosenCenter = (index + 0.5) * slice;
 
@@ -77,6 +79,7 @@ class SienaWheel {
 
     let finalRotation = targetRotation + turns * Math.PI * 2;
 
+    // Keep same base revolution so it doesn't jump backward
     const startBase = startRotation - startNorm;
     finalRotation += startBase;
 
@@ -149,7 +152,7 @@ class SienaWheel {
     ctx.lineWidth = radius * 0.028;
     ctx.stroke();
 
-    // Subtle inner ring
+    // Subtle inner ring for depth
     ctx.beginPath();
     ctx.arc(cx, cy, radius * 0.985, 0, Math.PI * 2);
     ctx.strokeStyle = "rgba(0,0,0,0.18)";
@@ -157,7 +160,7 @@ class SienaWheel {
     ctx.stroke();
     ctx.restore();
 
-    // Rotate wheel
+    // Rotate entire wheel
     ctx.save();
     ctx.translate(cx, cy);
     ctx.rotate(this.rotation);
@@ -168,8 +171,9 @@ class SienaWheel {
 
       const isEven = i % 2 === 0;
 
-      // Slice fill + text color per your spec
+      // Alternate slice colors
       const fill = isEven ? "#fcc917" : "#006b54";
+      // Text color per your spec
       const textColor = isEven ? "#006b55" : "#fcc917";
 
       // Slice wedge
@@ -180,14 +184,14 @@ class SienaWheel {
       ctx.fillStyle = fill;
       ctx.fill();
 
-      // Divider
+      // Slice divider (subtle white)
       ctx.beginPath();
       ctx.arc(0, 0, radius, startA, endA);
       ctx.strokeStyle = "rgba(255,255,255,0.22)";
       ctx.lineWidth = radius * 0.008;
       ctx.stroke();
 
-      // Clip to slice so text never bleeds
+      // Clip to slice so text never bleeds over edges
       ctx.save();
       ctx.beginPath();
       ctx.moveTo(0, 0);
@@ -204,12 +208,15 @@ class SienaWheel {
       ctx.textAlign = "left";
       ctx.textBaseline = "middle";
 
+      // Text area inside slice
       const pad = radius * 0.06;
       const tx = inner + radius * 0.14;
       const maxWidth = radius - tx - pad;
 
+      // Lines allowed depends on slice count
       const maxLines = n <= 10 ? 3 : 2;
 
+      // Shrink-to-fit
       let fontSize = Math.floor(radius * 0.06);
       const minFont = Math.floor(radius * 0.038);
 
@@ -222,6 +229,7 @@ class SienaWheel {
 
       ctx.fillStyle = textColor;
 
+      // Subtle shadow only when gold-on-green
       if (!isEven) {
         ctx.shadowColor = "rgba(0,0,0,0.28)";
         ctx.shadowBlur = radius * 0.012;
@@ -258,18 +266,17 @@ class SienaWheel {
     ctx.lineWidth = inner * 0.13;
     ctx.stroke();
 
-    // Center logo (spins with wheel)
+    // Center logo (spins with the wheel)
     if (this.logoReady && this.logoImg) {
       const img = this.logoImg;
 
-      // Clip to a circle so logo stays clean in the hub
       ctx.save();
       ctx.beginPath();
       ctx.arc(0, 0, hubR * 0.82, 0, Math.PI * 2);
       ctx.clip();
 
-      // Scale to fit
-      const maxSize = hubR * 1.45; // adjust if you want it larger/smaller
+      // Scale to fit inside hub
+      const maxSize = hubR * 1.45; // increase to 1.65 if your logo looks too small
       const scale = Math.min(maxSize / img.width, maxSize / img.height);
 
       const dw = img.width * scale;
@@ -279,7 +286,6 @@ class SienaWheel {
       ctx.drawImage(img, -dw / 2, -dh / 2, dw, dh);
       ctx.restore();
     } else {
-      // Fallback brand text if no logo or it fails to load
       const txt = (this.opts.brandText || "SIENA").trim();
       if (txt) {
         ctx.fillStyle = "rgba(255,255,255,0.95)";
@@ -296,6 +302,7 @@ class SienaWheel {
   }
 
   _wrapText(ctx, text, maxWidth, maxLines) {
+    // Wrap by words, hard-truncate last line with ellipsis if needed.
     const words = text.split(/\s+/).filter(Boolean);
     if (words.length === 0) return { lines: [""], fit: true };
 

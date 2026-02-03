@@ -165,6 +165,7 @@ html, body { height: 100%; margin: 0; font-family: system-ui, -apple-system, Seg
   display:block;
 }
 
+/* Pointer (fixed: points DOWN into the wheel) */
 .pointer{
   position:absolute;
   top: -10px;
@@ -175,11 +176,12 @@ html, body { height: 100%; margin: 0; font-family: system-ui, -apple-system, Seg
 
   border-left: 22px solid transparent;
   border-right: 22px solid transparent;
-  border-top: 42px solid var(--white); /* points DOWN into the wheel */
+  border-top: 42px solid var(--white); /* points DOWN */
 
   filter: drop-shadow(0 6px 10px rgba(0,0,0,0.35));
 }
 
+/* Lower third */
 .lower-third{
   position: absolute;
   left: 3vw;
@@ -226,4 +228,46 @@ html, body { height: 100%; margin: 0; font-family: system-ui, -apple-system, Seg
   background-position: 95% 8%;
   background-size: 280px auto;
   background-image: url("assets/siena-logo.svg");
+}
+
+/* Fullscreen icon button (top-right, translucent, auto-hide) */
+.fs-zone{
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  z-index: 60;
+  opacity: 1;
+  transition: opacity 220ms ease;
+}
+
+.fs-zone.hidden{
+  opacity: 0;
+  pointer-events: none;
+}
+
+.fs-zone.visible{
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.fs-btn{
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.55);
+  background: rgba(0,0,0,0.18);
+  color: rgba(255,255,255,0.92);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  backdrop-filter: blur(6px);
+}
+
+.fs-btn:hover{
+  background: rgba(0,0,0,0.28);
+  border-color: rgba(255,255,255,0.70);
+}
+
+.fs-icon{
+  display: inline-flex;
 }
