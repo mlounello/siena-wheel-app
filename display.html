@@ -144,6 +144,17 @@
       }
     });
 
+    // Touch/pointer support (no hover/mousemove on touch devices)
+    window.addEventListener('pointerdown', (e) => {
+      if (e.pointerType === 'touch') {
+        const thresholdX = window.innerWidth - 140;
+        const thresholdY = 90;
+        if (e.clientX >= thresholdX && e.clientY <= thresholdY) {
+          showFsZoneTemporarily();
+        }
+      }
+    });
+
     fsZone.addEventListener('mouseenter', () => {
       fsZone.classList.add('visible');
       fsZone.classList.remove('hidden');
