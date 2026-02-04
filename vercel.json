@@ -1,5 +1,9 @@
 {
   "cleanUrls": true,
+  "rewrites": [
+    { "source": "/operator", "destination": "/operator.html" },
+    { "source": "/display", "destination": "/display.html" }
+  ],
   "redirects": [
     { "source": "/", "destination": "/operator", "permanent": true }
   ]
